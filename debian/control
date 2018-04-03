@@ -1,0 +1,20 @@
+Source: yabit
+Section: utils
+Priority: optional
+Maintainer: Eugenio Paolantonio (g7) <me@medesimo.eu>
+Build-Depends: python3-all-dev (>= 3.2), debhelper (>= 8.0.0)
+X-Python3-Version: >= 3.4
+Standards-Version: 3.9.6
+Homepage: http://github.com/g7/yabit
+Vcs-Git: git://github.com/g7/yabit.git
+Vcs-Browser: https://github.com/g7/yabit
+
+Package: yabit
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, python3 (>= 3.4)
+Description: Yet Another BootImage Tool
+ yabit is a python written, device tree-aware tool to create, extract
+ and update Android BootImages ("boot.img").
+ .
+ It depends only on a reasonably up-to-date Python interpreter (3.4+)
+ and the standard library.
