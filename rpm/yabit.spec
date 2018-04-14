@@ -3,6 +3,8 @@ Version:        0.0.1
 Release:        1
 Summary:        Yet Another BootImage Tool
 
+Source:         %{name}-%{version}.tar.bz2
+
 License:        BSD-3-Clause
 URL:            https://github.com/g7/yabit
 
@@ -16,7 +18,7 @@ It depends only on a reasonably up-to-date Python interpreter (3.4+)
 and the standard library.
 
 %prep
-%autosetup -n %{srcname}-%{version}
+%setup -q -n %{name}-%{version}/%{name}
 
 %build
 python3 setup.py build
