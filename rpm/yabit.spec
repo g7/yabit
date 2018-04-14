@@ -18,7 +18,7 @@ It depends only on a reasonably up-to-date Python interpreter (3.4+)
 and the standard library.
 
 %prep
-%setup -q -n %{name}-%{version}/%{name}
+%setup -q -n %{name}-%{version}
 
 %build
 python3 setup.py build
