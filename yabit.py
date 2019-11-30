@@ -239,7 +239,7 @@ class BaseBlock:
 
 		return self.content.__contains__(item)
 
-	def parse(self, chunk, is_end, current_size=None):
+	def parse(self, chunk, is_end, current_size=0):
 		"""
 		Parses a chunk of bytes.
 
@@ -251,7 +251,10 @@ class BaseBlock:
 		returns -1.
 		"""
 
+		logger.debug("Current size is %d" % current_size)
+
 		if not is_end and self.STOP_REASON & StopReason.WORD:
+			logger.debug("Handling StopReason.WORD")
 			if self.MAGIC_WORD is not None:
 				magic_start = chunk.find(self.MAGIC_WORD, 0)
 				magic_end = chunk.find(self.STOP_WORD, 1 if self.STOP_WORD == self.MAGIC_WORD else 0)
@@ -275,11 +278,13 @@ class BaseBlock:
 		elif is_end and self.STOP_REASON & StopReason.END:
 			# We reached the end, so we possibly got the whole
 			# block
+			logger.debug("Handling StopReason.END")
 			magic_start = chunk.find(self.MAGIC_WORD)
 
 			if magic_start >= 0:
 				return ParseResult(status=ParseStatus.FOUND, start=magic_start, end=len(chunk))
 		elif current_size >= self.size and self.STOP_REASON & StopReason.SIZE:
+			logger.debug("Handling StopReason.SIZE")
 			return ParseResult(status=ParseStatus.FOUND, end=self.size)
 
 		return ParseResult(status=ParseStatus.NOT_FOUND)
@@ -312,6 +317,9 @@ class BaseBlock:
 		# If SIZE is among the StopReasons, every chunk is cached in a
 		# special variable, `full_content`.
 
+		begin = file_obj.tell()
+		logger.debug("Read begins at %d" % begin)
+
 		# If the only STOP_REASON is SIZE, then proceed in reading
 		# the whole block.
 		if self.STOP_REASON == StopReason.SIZE:
@@ -328,8 +336,6 @@ class BaseBlock:
 
 		with_full_content = ((self.STOP_REASON & StopReason.SIZE) > 0)
 
-		logger.debug("Read begins at %d" % file_obj.tell())
-		begin = file_obj.tell()
 		cached_content = b""
 		cached_content_begin = 0
 		full_content = b""
@@ -340,6 +346,7 @@ class BaseBlock:
 			is_end = (chunk == b"")
 
 			result = self.parse(chunk_with_cache, is_end, current_size=current_size)
+			logger.debug("Got ParseResult %s" % (result,))
 
 			if not is_end and with_full_content:
 				# Append to the full cache
@@ -354,7 +361,9 @@ class BaseBlock:
 				else:
 					self.set(chunk_with_cache, result)
 
-				file_obj.seek(begin + result.end)
+				boundary = begin + result.end
+				logger.debug("Seeking to %d, begin is %d, result.end is %d" % (boundary, begin, result.end))
+				file_obj.seek(boundary)
 				self.found = True
 				return
 			elif result.status == ParseStatus.MAGIC_WORD_FOUND:
@@ -813,22 +822,29 @@ class Kernel(HeaderizedBlock):
 		self.content["kernel"] = inner_kernel["kernel"]
 		self.content["dtbs"] = []
 
-		# When we got here, there are two situations:
+		# When we get here, there are two situations:
 		# The first is were no DTBs were found so we are at the
 		# boundary of what we can read;
 		# The second is that a DTB is found so we need to keep digging
 		ends_at = file_obj.tell()
+		logger.debug("Kernel: ends at %d" % ends_at)
 
 		# Update _kernel_real_size
 		self._kernel_real_size = ends_at - starts_at
-
-		logger.debug("Kernel: Searching for DTBs...")
+		logger.debug(
+			"Kernel: starts at %d, real size is %d, size with DTBs is %d" % (
+				starts_at,
+				self._kernel_real_size,
+				self.size
+			)
+		)
 
 		if (starts_at + self.size) > ends_at:
 			# We should hunt for DTBs...
 			# Create a BytesIO object with the rest of the kernel image.
 			# We don't care about chunking as it's going to be a few KBs
 			# anyways
+			logger.debug("Kernel: Searching for DTBs...")
 			rest = file_obj.read((starts_at + self.size) - ends_at)
 			with io.BytesIO(rest) as f:
 				while True:
@@ -841,6 +857,8 @@ class Kernel(HeaderizedBlock):
 					else:
 						# End of the story
 						break
+		else:
+			logger.debug("Kernel: Skipping searching for DTBs as this kernel doesn't have any")
 
 	def update_size(self):
 		"""
@@ -940,6 +958,7 @@ class BootImgContext:
 
 		with open(self.image, "rb") as f:
 			for block in self.blocks:
+				logger.debug("Loading block %s" % block)
 				# This allows the pagesize to be adjusted after reading
 				# the header
 				block.page_size = self.header.page_size
