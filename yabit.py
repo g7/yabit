@@ -578,8 +578,12 @@ class Padding(BaseBlock):
 
 	def get_remaining(self, file_obj):
 
-		return self.page_size - (file_obj.tell() % self.page_size)
+		mod = file_obj.tell() % self.page_size
 
+		if mod > 0:
+			return self.page_size - mod
+		else:
+			return 0
 
 	def analyse(self, file_obj):
 		"""
