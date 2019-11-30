@@ -279,7 +279,7 @@ class BaseBlock:
 			# We reached the end, so we possibly got the whole
 			# block
 			logger.debug("Handling StopReason.END")
-			magic_start = chunk.find(self.MAGIC_WORD)
+			magic_start = chunk.find(self.MAGIC_WORD) if self.MAGIC_WORD is not None else 0
 
 			if magic_start >= 0:
 				return ParseResult(status=ParseStatus.FOUND, start=magic_start, end=len(chunk))
