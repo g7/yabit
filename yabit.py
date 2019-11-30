@@ -372,7 +372,7 @@ class BaseBlock:
 			elif result.status == ParseStatus.NOT_FOUND:
 				# Cache this page
 				cached_content = chunk
-				cached_content_begin = current_size - (self.page_size * PAGES_TO_READ)
+				cached_content_begin = current_size - len(chunk)
 
 			if is_end:
 				# If this is the end and we are here, nothing has been
