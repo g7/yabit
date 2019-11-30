@@ -577,6 +577,13 @@ class Padding(BaseBlock):
 	"""
 
 	def get_remaining(self, file_obj):
+		"""
+		Returns the remaining bytes to write in order to properly pad
+		the section.
+
+		:param: file_obj: the opened file object
+		:returns: the number of bytes to write
+		"""
 
 		mod = file_obj.tell() % self.page_size
 
@@ -843,13 +850,13 @@ class Kernel(HeaderizedBlock):
 			)
 		)
 
-		if (starts_at + self.size) > ends_at:
+		if self.size - self._kernel_real_size > 0:
 			# We should hunt for DTBs...
 			# Create a BytesIO object with the rest of the kernel image.
 			# We don't care about chunking as it's going to be a few KBs
 			# anyways
 			logger.debug("Kernel: Searching for DTBs...")
-			rest = file_obj.read((starts_at + self.size) - ends_at)
+			rest = file_obj.read(self.size - self._kernel_real_size)
 			with io.BytesIO(rest) as f:
 				while True:
 					devicetree = DeviceTree()
