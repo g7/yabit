@@ -253,7 +253,10 @@ class BaseBlock:
 
 		logger.debug("Current size is %d" % current_size)
 
-		if not is_end and self.STOP_REASON & StopReason.WORD:
+		if current_size >= self.size and self.STOP_REASON & StopReason.SIZE:
+			logger.debug("Handling StopReason.SIZE")
+			return ParseResult(status=ParseStatus.FOUND, end=self.size)
+		elif not is_end and self.STOP_REASON & StopReason.WORD:
 			logger.debug("Handling StopReason.WORD")
 			if self.MAGIC_WORD is not None:
 				magic_start = chunk.find(self.MAGIC_WORD, 0)
@@ -283,9 +286,6 @@ class BaseBlock:
 
 			if magic_start >= 0:
 				return ParseResult(status=ParseStatus.FOUND, start=magic_start, end=len(chunk))
-		elif current_size >= self.size and self.STOP_REASON & StopReason.SIZE:
-			logger.debug("Handling StopReason.SIZE")
-			return ParseResult(status=ParseStatus.FOUND, end=self.size)
 
 		return ParseResult(status=ParseStatus.NOT_FOUND)
 
