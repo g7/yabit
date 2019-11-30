@@ -84,13 +84,13 @@ class ParseResult(namedtuple("_ParseResult", ["status", "start", "end"])):
 
 class StopReason(enum.IntEnum):
 
-	STRUCT_END = 1
+	STRUCT_END = 0x01
 
-	WORD = 2
+	WORD = 0x02
 
-	END = 3
+	END = 0x04
 
-	SIZE = 4
+	SIZE = 0x08
 
 class ParseStatus(enum.IntEnum):
 
