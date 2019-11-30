@@ -255,7 +255,7 @@ class BaseBlock:
 
 		if current_size >= self.size and self.STOP_REASON & StopReason.SIZE:
 			logger.debug("Handling StopReason.SIZE")
-			return ParseResult(status=ParseStatus.FOUND, end=self.size)
+			return ParseResult(status=ParseStatus.FOUND, end=(len(chunk) - (current_size - self.size)))
 		elif not is_end and self.STOP_REASON & StopReason.WORD:
 			logger.debug("Handling StopReason.WORD")
 			if self.MAGIC_WORD is not None:
