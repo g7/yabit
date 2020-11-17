@@ -1141,7 +1141,7 @@ parser.add_argument(
 	"--pagesize", "-p",
 	help="the page size to use",
 	choices=[2**i for i in range(11,15)],
-	default=DEFAULT_PAGE_SIZE
+	default=None
 )
 
 if __name__ == "__main__":
