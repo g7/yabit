@@ -84,13 +84,13 @@ class ParseResult(namedtuple("_ParseResult", ["status", "start", "end"])):
 
 class StopReason(enum.IntEnum):
 
-	STRUCT_END = 1
+	STRUCT_END = 0x01
 
-	WORD = 2
+	WORD = 0x02
 
-	END = 3
+	END = 0x04
 
-	SIZE = 4
+	SIZE = 0x08
 
 class ParseStatus(enum.IntEnum):
 
@@ -239,7 +239,7 @@ class BaseBlock:
 
 		return self.content.__contains__(item)
 
-	def parse(self, chunk, is_end, current_size=None):
+	def parse(self, chunk, is_end, current_size=0):
 		"""
 		Parses a chunk of bytes.
 
@@ -251,7 +251,13 @@ class BaseBlock:
 		returns -1.
 		"""
 
-		if not is_end and self.STOP_REASON & StopReason.WORD:
+		logger.debug("Current size is %d" % current_size)
+
+		if current_size >= self.size and self.STOP_REASON & StopReason.SIZE:
+			logger.debug("Handling StopReason.SIZE")
+			return ParseResult(status=ParseStatus.FOUND, end=(len(chunk) - (current_size - self.size)))
+		elif not is_end and self.STOP_REASON & StopReason.WORD:
+			logger.debug("Handling StopReason.WORD")
 			if self.MAGIC_WORD is not None:
 				magic_start = chunk.find(self.MAGIC_WORD, 0)
 				magic_end = chunk.find(self.STOP_WORD, 1 if self.STOP_WORD == self.MAGIC_WORD else 0)
@@ -275,12 +281,11 @@ class BaseBlock:
 		elif is_end and self.STOP_REASON & StopReason.END:
 			# We reached the end, so we possibly got the whole
 			# block
-			magic_start = chunk.find(self.MAGIC_WORD)
+			logger.debug("Handling StopReason.END")
+			magic_start = chunk.find(self.MAGIC_WORD) if self.MAGIC_WORD is not None else 0
 
 			if magic_start >= 0:
 				return ParseResult(status=ParseStatus.FOUND, start=magic_start, end=len(chunk))
-		elif current_size >= self.size and self.STOP_REASON & StopReason.SIZE:
-			return ParseResult(status=ParseStatus.FOUND, end=self.size)
 
 		return ParseResult(status=ParseStatus.NOT_FOUND)
 
@@ -312,6 +317,9 @@ class BaseBlock:
 		# If SIZE is among the StopReasons, every chunk is cached in a
 		# special variable, `full_content`.
 
+		begin = file_obj.tell()
+		logger.debug("Read begins at %d" % begin)
+
 		# If the only STOP_REASON is SIZE, then proceed in reading
 		# the whole block.
 		if self.STOP_REASON == StopReason.SIZE:
@@ -328,8 +336,6 @@ class BaseBlock:
 
 		with_full_content = ((self.STOP_REASON & StopReason.SIZE) > 0)
 
-		logger.debug("Read begins at %d" % file_obj.tell())
-		begin = file_obj.tell()
 		cached_content = b""
 		cached_content_begin = 0
 		full_content = b""
@@ -340,6 +346,7 @@ class BaseBlock:
 			is_end = (chunk == b"")
 
 			result = self.parse(chunk_with_cache, is_end, current_size=current_size)
+			logger.debug("Got ParseResult %s" % (result,))
 
 			if not is_end and with_full_content:
 				# Append to the full cache
@@ -354,7 +361,9 @@ class BaseBlock:
 				else:
 					self.set(chunk_with_cache, result)
 
-				file_obj.seek(begin + result.end)
+				boundary = begin + result.end
+				logger.debug("Seeking to %d, begin is %d, result.end is %d" % (boundary, begin, result.end))
+				file_obj.seek(boundary)
 				self.found = True
 				return
 			elif result.status == ParseStatus.MAGIC_WORD_FOUND:
@@ -363,7 +372,7 @@ class BaseBlock:
 			elif result.status == ParseStatus.NOT_FOUND:
 				# Cache this page
 				cached_content = chunk
-				cached_content_begin = current_size - (self.page_size * PAGES_TO_READ)
+				cached_content_begin = current_size - len(chunk)
 
 			if is_end:
 				# If this is the end and we are here, nothing has been
@@ -568,9 +577,20 @@ class Padding(BaseBlock):
 	"""
 
 	def get_remaining(self, file_obj):
+		"""
+		Returns the remaining bytes to write in order to properly pad
+		the section.
 
-		return self.page_size - (file_obj.tell() % self.page_size)
+		:param: file_obj: the opened file object
+		:returns: the number of bytes to write
+		"""
 
+		mod = file_obj.tell() % self.page_size
+
+		if mod > 0:
+			return self.page_size - mod
+		else:
+			return 0
 
 	def analyse(self, file_obj):
 		"""
@@ -813,23 +833,30 @@ class Kernel(HeaderizedBlock):
 		self.content["kernel"] = inner_kernel["kernel"]
 		self.content["dtbs"] = []
 
-		# When we got here, there are two situations:
+		# When we get here, there are two situations:
 		# The first is were no DTBs were found so we are at the
 		# boundary of what we can read;
 		# The second is that a DTB is found so we need to keep digging
 		ends_at = file_obj.tell()
+		logger.debug("Kernel: ends at %d" % ends_at)
 
 		# Update _kernel_real_size
 		self._kernel_real_size = ends_at - starts_at
+		logger.debug(
+			"Kernel: starts at %d, real size is %d, size with DTBs is %d" % (
+				starts_at,
+				self._kernel_real_size,
+				self.size
+			)
+		)
 
-		logger.debug("Kernel: Searching for DTBs...")
-
-		if (starts_at + self.size) > ends_at:
+		if self.size - self._kernel_real_size > 0:
 			# We should hunt for DTBs...
 			# Create a BytesIO object with the rest of the kernel image.
 			# We don't care about chunking as it's going to be a few KBs
 			# anyways
-			rest = file_obj.read((starts_at + self.size) - ends_at)
+			logger.debug("Kernel: Searching for DTBs...")
+			rest = file_obj.read(self.size - self._kernel_real_size)
 			with io.BytesIO(rest) as f:
 				while True:
 					devicetree = DeviceTree()
@@ -841,6 +868,8 @@ class Kernel(HeaderizedBlock):
 					else:
 						# End of the story
 						break
+		else:
+			logger.debug("Kernel: Skipping searching for DTBs as this kernel doesn't have any")
 
 	def update_size(self):
 		"""
@@ -940,6 +969,7 @@ class BootImgContext:
 
 		with open(self.image, "rb") as f:
 			for block in self.blocks:
+				logger.debug("Loading block %s" % block)
 				# This allows the pagesize to be adjusted after reading
 				# the header
 				block.page_size = self.header.page_size
@@ -1111,7 +1141,7 @@ parser.add_argument(
 	"--pagesize", "-p",
 	help="the page size to use",
 	choices=[2**i for i in range(11,15)],
-	default=DEFAULT_PAGE_SIZE
+	default=None
 )
 
 if __name__ == "__main__":
