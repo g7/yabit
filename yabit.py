@@ -1219,7 +1219,16 @@ if __name__ == "__main__":
 		# Print header
 		if args.print_header:
 			for component in context.header.PARAMS:
-				print("%s: %s" % (component, context.header[component]))
+				if component in [
+					"kernel_load_address",
+					"initramfs_load_address",
+					"second_image_load_address",
+					"kernel_tags_load_address",
+				]:
+					# FIXME: use a nicer way to do this?
+					print("{0}: {1:#0{2}x}".format(component, context.header[component], 10))
+				else:
+					print("{0}: {1}".format(component, context.header[component]))
 
 		# Dump
 		if args.dump and not DumpAction.NOTHING in args.dump:
